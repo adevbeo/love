@@ -904,6 +904,27 @@ function getRemoteAddress(request: Request): string {
   return request.headers.get("x-real-ip") ?? "unknown";
 }
 
+function getServerlessRequestOrigin(request: Request, publicBaseUrl: string): string {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = forwardedHost?.trim() || request.headers.get("host")?.trim();
+
+  if (host) {
+    const forwardedProto = request.headers.get("x-forwarded-proto");
+    const protocol = forwardedProto?.split(",")[0]?.trim() || "https";
+    return `${protocol}://${host}`;
+  }
+
+  return publicBaseUrl;
+}
+
+export function resolveServerlessUrl(request: Request, publicBaseUrl: string): URL {
+  try {
+    return new URL(request.url);
+  } catch {
+    return new URL(request.url, getServerlessRequestOrigin(request, publicBaseUrl));
+  }
+}
+
 async function getServerlessApp(): Promise<LoveApiServer> {
   if (!serverlessAppPromise) {
     serverlessAppPromise = Promise.resolve().then(() => {
@@ -926,16 +947,14 @@ async function getServerlessApp(): Promise<LoveApiServer> {
   }
 }
 
-function normalizeServerlessRequest(request: Request): Request {
-  const currentUrl = new URL(request.url);
+function normalizeServerlessRequest(request: Request, publicBaseUrl: string): Request {
+  const currentUrl = resolveServerlessUrl(request, publicBaseUrl);
   const pathname = currentUrl.searchParams.get("pathname");
 
-  if (!pathname) {
-    return request;
+  if (pathname) {
+    currentUrl.pathname = pathname;
+    currentUrl.searchParams.delete("pathname");
   }
-
-  currentUrl.pathname = pathname;
-  currentUrl.searchParams.delete("pathname");
 
   return new Request(currentUrl, request);
 }
@@ -943,7 +962,7 @@ function normalizeServerlessRequest(request: Request): Request {
 export default async function handleServerlessRequest(request: Request): Promise<Response> {
   try {
     const app = await getServerlessApp();
-    return await app.handle(normalizeServerlessRequest(request), {
+    return await app.handle(normalizeServerlessRequest(request, app.config.publicBaseUrl), {
       remoteAddress: getRemoteAddress(request)
     });
   } catch (error) {
