@@ -2,11 +2,11 @@
 
 Backend starter cho `Nha Cua Hai Dua`, bám theo handoff backend cho auth, `app-content`, `couple-space`, media upload và email outbox.
 
-Repo này ưu tiên một nền chạy được ngay với Node 25 native TypeScript + `node:sqlite`, để đội backend có thể bắt tay vào triển khai mà không cần scaffold thêm framework trước. Contract API và dữ liệu được giữ ổn định để có thể chuyển sang Next.js route handlers sau nếu muốn.
+Repo này ưu tiên một nền chạy được ngay với Node 24+ native TypeScript + `node:sqlite`, để đội backend có thể bắt tay vào triển khai mà không cần scaffold thêm framework trước. Contract API và dữ liệu được giữ ổn định để có thể chuyển sang Next.js route handlers sau nếu muốn.
 
 ## Yêu cầu runtime
 
-- Node `>= 25`
+- Node `>= 24`
 - Không cần cài package ngoài cho bản starter hiện tại
 
 ## Khởi động nhanh
@@ -80,5 +80,6 @@ Luu y:
 ## Ghi chú production
 
 - `MAIL_PROVIDER=queued` chỉ phù hợp dev/staging nội bộ.
-- `node:sqlite` hiện vẫn là module core experimental của Node 25.
+- `node:sqlite` hiện vẫn là module core experimental.
+- Khi deploy lên Vercel Functions, SQLite và upload mặc định sẽ rơi vào `/tmp`, nên chỉ phù hợp demo hoặc preview vì dữ liệu không bền vững qua cold start/scale.
 - Nếu triển khai public thật, cần thay worker email mẫu bằng provider thật, thêm persistent rate limit, logging/metrics và backup cho thư mục upload.

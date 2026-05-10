@@ -203,9 +203,15 @@ export class LoveApiServer {
       duplex: hasBody ? "half" : undefined
     });
 
+    return this.handle(request, {
+      remoteAddress: params.remoteAddress ?? "127.0.0.1"
+    });
+  }
+
+  async handle(request: Request, context: Partial<RequestContext> = {}): Promise<Response> {
     try {
       return await this.handleRequest(request, {
-        remoteAddress: params.remoteAddress ?? "127.0.0.1"
+        remoteAddress: context.remoteAddress ?? "unknown"
       });
     } catch (error) {
       return this.errorResponse(error);
@@ -214,7 +220,7 @@ export class LoveApiServer {
 
   private async handleNodeRequest(req: IncomingMessage, res: ServerResponse) {
     const request = this.toWebRequest(req);
-    const response = await this.handleRequest(request, {
+    const response = await this.handle(request, {
       remoteAddress: req.socket.remoteAddress ?? "unknown"
     });
     await this.writeNodeResponse(res, response);
