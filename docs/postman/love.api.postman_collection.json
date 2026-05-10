@@ -1,0 +1,622 @@
+{
+  "info": {
+    "_postman_id": "be4db37e-32d0-4ee1-a4ff-1b6d7caea1b7",
+    "name": "love.api",
+    "description": "Postman collection de test backend `love.api` cho Nha Cua Hai Dua. Flow khuyen nghi: Health -> App Content -> Register Couple -> chay `npm run email:work` de lay temp password -> nhap vao bien `tempPassword` -> Login With Temp Password -> Complete Password Change -> Couple Space -> Media Upload. Luu y request upload file co the can reselect file trong UI Postman sau khi import.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "Smoke check service."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get App Content",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/app-content",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "app-content"
+          ]
+        },
+        "description": "Lay catalog dong cua app."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status is 200', function () {",
+              "  pm.response.to.have.status(200);",
+              "});",
+              "const body = pm.response.json();",
+              "pm.test('app content exists', function () {",
+              "  pm.expect(body.appContent).to.be.an('object');",
+              "  pm.expect(body.appContent.content).to.be.an('object');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Couple",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"primaryEmail\": \"{{primaryEmail}}\",\n  \"secondaryEmail\": \"{{secondaryEmail}}\",\n  \"label\": \"{{coupleLabel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register-couple",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register-couple"
+              ]
+            },
+            "description": "Dang ky 1 couple account voi 2 email. Sau request nay, chay `npm run email:work` de doc temp password trong stdout."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.couple && body.couple.id) {",
+                  "  pm.environment.set('coupleId', body.couple.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login With Temp Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tempLoginEmail}}\",\n  \"password\": \"{{tempPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login lan dau bang mat khau tam. Bien `tempPassword` can duoc set thu cong tu output cua email worker."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const session = body.session || {};",
+                  "if (session.accessToken) pm.environment.set('accessToken', session.accessToken);",
+                  "if (session.refreshToken) pm.environment.set('refreshToken', session.refreshToken);",
+                  "if (session.couple && session.couple.id) pm.environment.set('coupleId', session.couple.id);",
+                  "if (typeof session.requiresPasswordChange !== 'undefined') {",
+                  "  pm.environment.set('requiresPasswordChange', String(session.requiresPasswordChange));",
+                  "}",
+                  "pm.test('password change is required', function () {",
+                  "  pm.expect(session.requiresPasswordChange).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Complete Password Change",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"{{finalPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/complete-password-change",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "complete-password-change"
+              ]
+            },
+            "description": "Doi mat khau sau first login hoac reset password."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const session = body.session || {};",
+                  "if (session.accessToken) pm.environment.set('accessToken', session.accessToken);",
+                  "if (session.refreshToken) pm.environment.set('refreshToken', session.refreshToken);",
+                  "pm.environment.set('requiresPasswordChange', 'false');",
+                  "pm.environment.set('loginPassword', pm.environment.get('finalPassword'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login With Final Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tempLoginEmail}}\",\n  \"password\": \"{{finalPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login lai sau khi da doi mat khau xong."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const session = body.session || {};",
+                  "if (session.accessToken) pm.environment.set('accessToken', session.accessToken);",
+                  "if (session.refreshToken) pm.environment.set('refreshToken', session.refreshToken);",
+                  "pm.test('password change is no longer required', function () {",
+                  "  pm.expect(session.requiresPasswordChange).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Rotate access/refresh token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "const session = body.session || {};",
+                  "if (session.accessToken) pm.environment.set('accessToken', session.accessToken);",
+                  "if (session.refreshToken) pm.environment.set('refreshToken', session.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{tempLoginEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/request-reset",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "request-reset"
+              ]
+            },
+            "description": "Sau request nay, chay lai `npm run email:work`, copy temp password moi vao bien `tempPassword`, roi dung lai request Login With Temp Password."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.environment.unset('accessToken');",
+                  "pm.environment.unset('refreshToken');",
+                  "pm.environment.set('requiresPasswordChange', 'true');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Couple Space",
+      "item": [
+        {
+          "name": "Get Couple Space",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/couple-space",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "couple-space"
+              ]
+            },
+            "description": "Lay snapshot hien tai cua couple."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.snapshot && body.snapshot.revision) {",
+                  "  pm.environment.set('snapshotRevision', String(body.snapshot.revision));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Put Couple Space",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"snapshot\": {\n    \"schemaVersion\": 1,\n    \"content\": {\n      \"settings\": {\n        \"notificationsEnabled\": true\n      },\n      \"diaries\": [\n        {\n          \"id\": \"diary-1\",\n          \"author\": \"Anh\",\n          \"createdAt\": \"2026-05-10T10:01:00.000Z\",\n          \"text\": \"Hom nay anh nho em.\"\n        }\n      ],\n      \"letters\": [],\n      \"capsules\": [],\n      \"memories\": [],\n      \"gallery\": [],\n      \"promises\": [],\n      \"moods\": [],\n      \"countdowns\": [],\n      \"voiceNotes\": [],\n      \"dailyReplies\": []\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/couple-space",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "couple-space"
+              ]
+            },
+            "description": "Ghi de full snapshot theo co che last write wins."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.snapshot && body.snapshot.revision) {",
+                  "  pm.environment.set('snapshotRevision', String(body.snapshot.revision));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {
+          "name": "Upload Image",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "kind",
+                  "value": "image",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{imageFilePath}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/media/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media",
+                "upload"
+              ]
+            },
+            "description": "Upload anh. Neu Postman khong resolve duoc bien `imageFilePath` cho file, mo request va chon lai file bang tay."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.asset && body.asset.url) pm.environment.set('assetUrl', body.asset.url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload Audio",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "kind",
+                  "value": "audio",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "{{audioFilePath}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/media/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "media",
+                "upload"
+              ]
+            },
+            "description": "Upload audio. Co the can chon lai file bang tay trong Postman."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "const body = pm.response.json();",
+                  "if (body.asset && body.asset.url) pm.environment.set('assetUrl', body.asset.url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Last Uploaded Asset",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{assetUrl}}",
+              "host": [
+                "{{assetUrl}}"
+              ]
+            },
+            "description": "Tai file vua upload qua `assetUrl` duoc luu tu test script."
+          }
+        }
+      ]
+    }
+  ]
+}

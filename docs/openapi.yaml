@@ -1,0 +1,495 @@
+openapi: 3.1.0
+info:
+  title: love.api
+  version: 0.1.0
+  description: Backend API cho Nha Cua Hai Dua.
+servers:
+  - url: http://localhost:3000
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      required: [error, code]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        details:
+          nullable: true
+    Couple:
+      type: object
+      required: [id, label, primaryEmail, secondaryEmail]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        primaryEmail:
+          type: string
+          format: email
+        secondaryEmail:
+          type: string
+          format: email
+    User:
+      type: object
+      required: [id, email, requiresPasswordChange]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          nullable: true
+        requiresPasswordChange:
+          type: boolean
+    Session:
+      type: object
+      required: [accessToken, refreshToken, requiresPasswordChange, user, couple]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        requiresPasswordChange:
+          type: boolean
+        user:
+          $ref: "#/components/schemas/User"
+        couple:
+          $ref: "#/components/schemas/Couple"
+    RegisterCoupleRequest:
+      type: object
+      required: [primaryEmail, secondaryEmail]
+      properties:
+        primaryEmail:
+          type: string
+          format: email
+        secondaryEmail:
+          type: string
+          format: email
+        label:
+          type: string
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+    RequestResetRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ChangePasswordRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        newPassword:
+          type: string
+    HomeFeature:
+      type: object
+      required: [label, subtitle, route, icon]
+      properties:
+        label:
+          type: string
+        subtitle:
+          type: string
+        route:
+          type: string
+          enum: [journal, mailbox, memories, map, gallery, promises, daily, capsule, mood, countdown, voice, random]
+        icon:
+          type: string
+    MoodOption:
+      type: object
+      required: [id, label, icon, score]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        icon:
+          type: string
+        score:
+          type: number
+    SecretReaction:
+      type: object
+      required: [id, label, icon]
+      properties:
+        id:
+          type: string
+          enum: [miss, hug, proud, cherish]
+        label:
+          type: string
+        icon:
+          type: string
+    GalleryStageOption:
+      type: object
+      required: [label, value]
+      properties:
+        label:
+          type: string
+        value:
+          type: string
+          enum: [before, after, moment]
+    AppContentCatalog:
+      type: object
+      required:
+        - people
+        - homeFeatures
+        - artworkOptions
+        - moodOptions
+        - secretReactions
+        - galleryStageOptions
+        - capsuleOptions
+        - dailyPrompts
+      properties:
+        people:
+          type: array
+          items:
+            type: string
+        homeFeatures:
+          type: array
+          items:
+            $ref: "#/components/schemas/HomeFeature"
+        artworkOptions:
+          type: array
+          items:
+            type: string
+            enum: [window, portrait, sunset, spark, cafe, flowers, movie, candles, letter, jar]
+        moodOptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/MoodOption"
+        secretReactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecretReaction"
+        galleryStageOptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/GalleryStageOption"
+        capsuleOptions:
+          type: array
+          items:
+            type: string
+        dailyPrompts:
+          type: array
+          items:
+            type: string
+    AppContentRecord:
+      type: object
+      required: [id, version, status, content, updatedAt, updatedBy]
+      properties:
+        id:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+        content:
+          $ref: "#/components/schemas/AppContentCatalog"
+        updatedAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+    SnapshotPayload:
+      type: object
+      required: [schemaVersion, content]
+      properties:
+        schemaVersion:
+          type: integer
+        content:
+          type: object
+          additionalProperties: true
+    SnapshotRecord:
+      type: object
+      required: [id, coupleId, schemaVersion, revision, updatedAt, content]
+      properties:
+        id:
+          type: string
+        coupleId:
+          type: string
+        schemaVersion:
+          type: integer
+        revision:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+        updatedByMemberId:
+          type: string
+          nullable: true
+        content:
+          type: object
+          additionalProperties: true
+    PutSnapshotRequest:
+      type: object
+      required: [snapshot]
+      properties:
+        snapshot:
+          $ref: "#/components/schemas/SnapshotPayload"
+    MediaAssetResponse:
+      type: object
+      required: [id, url, kind, contentType, filename]
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+          format: uri
+        kind:
+          type: string
+          enum: [image, audio]
+        contentType:
+          type: string
+        filename:
+          type: string
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+  /api/app-content:
+    get:
+      summary: Get active app content catalog
+      responses:
+        "200":
+          description: App content
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [appContent]
+                properties:
+                  appContent:
+                    $ref: "#/components/schemas/AppContentRecord"
+        "500":
+          description: Missing seed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/auth/register-couple:
+    post:
+      summary: Create couple account and queue temporary password emails
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterCoupleRequest"
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/auth/login:
+    post:
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: "#/components/schemas/Session"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/auth/refresh:
+    post:
+      summary: Rotate access and refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Session rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: "#/components/schemas/Session"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/auth/request-reset:
+    post:
+      summary: Request temporary password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestResetRequest"
+      responses:
+        "200":
+          description: Generic message
+  /api/auth/complete-password-change:
+    post:
+      summary: Complete first login or password reset
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed and new session returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session]
+                properties:
+                  session:
+                    $ref: "#/components/schemas/Session"
+        "403":
+          description: Token valid but member disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/couple-space:
+    get:
+      summary: Get snapshot for authenticated couple
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Snapshot or null
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [snapshot]
+                properties:
+                  snapshot:
+                    oneOf:
+                      - $ref: "#/components/schemas/SnapshotRecord"
+                      - type: "null"
+        "403":
+          description: Password change required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      summary: Overwrite full snapshot for authenticated couple
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PutSnapshotRequest"
+      responses:
+        "200":
+          description: Snapshot saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [snapshot]
+                properties:
+                  snapshot:
+                    $ref: "#/components/schemas/SnapshotRecord"
+  /api/media/upload:
+    post:
+      summary: Upload image or audio asset
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [kind, file]
+              properties:
+                kind:
+                  type: string
+                  enum: [image, audio]
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Upload success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [asset]
+                properties:
+                  asset:
+                    $ref: "#/components/schemas/MediaAssetResponse"
+        "413":
+          description: File too large
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "415":
+          description: Unsupported mime
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"

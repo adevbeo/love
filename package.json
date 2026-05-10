@@ -1,0 +1,13 @@
+{
+  "name": "love.api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/server.ts",
+    "start": "node --env-file=.env src/server.ts",
+    "seed:app-content": "node --env-file=.env scripts/seed-app-content.ts",
+    "email:work": "node --env-file=.env scripts/process-email-jobs.ts",
+    "test": "node --test"
+  }
+}
