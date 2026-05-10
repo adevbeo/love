@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 
 export type RuntimeTarget = "local" | "vercel";
 
@@ -69,6 +69,22 @@ function detectRuntimeTarget(): RuntimeTarget {
   return process.env.VERCEL === "1" ? "vercel" : "local";
 }
 
+function runtimeWritableRoot(runtimeTarget: RuntimeTarget): string {
+  if (runtimeTarget === "vercel") {
+    return resolve(tmpdir(), "love-api");
+  }
+
+  return process.cwd();
+}
+
+function resolveStoragePath(pathname: string, runtimeTarget: RuntimeTarget): string {
+  if (isAbsolute(pathname)) {
+    return pathname;
+  }
+
+  return resolve(runtimeWritableRoot(runtimeTarget), pathname);
+}
+
 function defaultDbPath(runtimeTarget: RuntimeTarget): string {
   if (runtimeTarget === "vercel") {
     return resolve(tmpdir(), "love-api", "love-api.sqlite");
@@ -97,8 +113,9 @@ export function loadConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   const port = overrides.port ?? parseNumber(process.env.PORT, 3000);
   const nodeEnv = overrides.nodeEnv ?? process.env.NODE_ENV ?? "development";
   const runtimeTarget = overrides.runtimeTarget ?? detectRuntimeTarget();
-  const dbPath = overrides.dbPath ?? resolve(process.cwd(), process.env.DB_PATH ?? defaultDbPath(runtimeTarget));
-  const uploadRoot = overrides.uploadRoot ?? resolve(process.cwd(), process.env.UPLOAD_ROOT ?? defaultUploadRoot(runtimeTarget));
+  const dbPath = overrides.dbPath ?? resolveStoragePath(process.env.DB_PATH ?? defaultDbPath(runtimeTarget), runtimeTarget);
+  const uploadRoot =
+    overrides.uploadRoot ?? resolveStoragePath(process.env.UPLOAD_ROOT ?? defaultUploadRoot(runtimeTarget), runtimeTarget);
 
   ensureParentDirectory(dbPath);
   mkdirSync(uploadRoot, { recursive: true });
