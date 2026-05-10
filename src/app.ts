@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, normalize, resolve } from "node:path";
 import { Readable } from "node:stream";
@@ -40,6 +40,13 @@ interface RateLimitRule {
   limit: number;
   windowMs: number;
 }
+
+type ServerlessHeaders = Headers | IncomingHttpHeaders | Record<string, string | string[] | undefined> | undefined;
+
+type ServerlessRequestLike = {
+  headers?: ServerlessHeaders;
+  url?: string;
+};
 
 function responseHeaders(config: AppConfig, extraHeaders: HeadersInit = {}): Headers {
   const headers = new Headers(extraHeaders);
@@ -892,8 +899,31 @@ export class LoveApiServer {
 
 let serverlessAppPromise: Promise<LoveApiServer> | undefined;
 
-function getRemoteAddress(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
+function readHeader(headers: ServerlessHeaders, name: string): string | undefined {
+  if (!headers) {
+    return undefined;
+  }
+
+  if (typeof (headers as Headers).get === "function") {
+    return (headers as Headers).get(name) ?? undefined;
+  }
+
+  const record = headers as Record<string, string | string[] | undefined>;
+  const value = record[name.toLowerCase()] ?? record[name];
+
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+}
+
+function isWebRequest(request: Request | IncomingMessage): request is Request {
+  return typeof (request as Request).headers?.get === "function";
+}
+
+function getRemoteAddress(request: Request | IncomingMessage): string {
+  const forwardedFor = readHeader(request.headers, "x-forwarded-for");
   if (forwardedFor) {
     const [firstAddress] = forwardedFor.split(",");
     if (firstAddress) {
@@ -901,15 +931,15 @@ function getRemoteAddress(request: Request): string {
     }
   }
 
-  return request.headers.get("x-real-ip") ?? "unknown";
+  return readHeader(request.headers, "x-real-ip") ?? ("socket" in request ? request.socket.remoteAddress ?? "unknown" : "unknown");
 }
 
-function getServerlessRequestOrigin(request: Request, publicBaseUrl: string): string {
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const host = forwardedHost?.trim() || request.headers.get("host")?.trim();
+function getServerlessRequestOrigin(request: ServerlessRequestLike, publicBaseUrl: string): string {
+  const forwardedHost = readHeader(request.headers, "x-forwarded-host");
+  const host = forwardedHost?.trim() || readHeader(request.headers, "host")?.trim();
 
   if (host) {
-    const forwardedProto = request.headers.get("x-forwarded-proto");
+    const forwardedProto = readHeader(request.headers, "x-forwarded-proto");
     const protocol = forwardedProto?.split(",")[0]?.trim() || "https";
     return `${protocol}://${host}`;
   }
@@ -917,12 +947,58 @@ function getServerlessRequestOrigin(request: Request, publicBaseUrl: string): st
   return publicBaseUrl;
 }
 
-export function resolveServerlessUrl(request: Request, publicBaseUrl: string): URL {
+export function resolveServerlessUrl(request: ServerlessRequestLike, publicBaseUrl: string): URL {
+  const requestUrl = request.url ?? "/";
+
   try {
-    return new URL(request.url);
+    return new URL(requestUrl);
   } catch {
-    return new URL(request.url, getServerlessRequestOrigin(request, publicBaseUrl));
+    return new URL(requestUrl, getServerlessRequestOrigin(request, publicBaseUrl));
   }
+}
+
+function toServerlessWebRequest(request: IncomingMessage, publicBaseUrl: string): Request {
+  const method = request.method ?? "GET";
+  const url = resolveServerlessUrl(request, publicBaseUrl);
+  const hasBody = !["GET", "HEAD"].includes(method);
+
+  return new Request(url, {
+    method,
+    headers: request.headers as HeadersInit,
+    body: hasBody ? (Readable.toWeb(request) as ReadableStream<Uint8Array>) : undefined,
+    duplex: hasBody ? "half" : undefined
+  });
+}
+
+async function writeServerlessNodeResponse(nodeResponse: ServerResponse, response: Response) {
+  nodeResponse.statusCode = response.status;
+  response.headers.forEach((value, key) => {
+    nodeResponse.setHeader(key, value);
+  });
+
+  if (!response.body) {
+    nodeResponse.end();
+    return;
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  nodeResponse.end(buffer);
+}
+
+function createInternalErrorResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      error: "Loi he thong",
+      code: "INTERNAL_SERVER_ERROR"
+    }),
+    {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store"
+      }
+    }
+  );
 }
 
 async function getServerlessApp(): Promise<LoveApiServer> {
@@ -959,27 +1035,40 @@ function normalizeServerlessRequest(request: Request, publicBaseUrl: string): Re
   return new Request(currentUrl, request);
 }
 
-export default async function handleServerlessRequest(request: Request): Promise<Response> {
+export default async function handleServerlessRequest(
+  request: Request | IncomingMessage,
+  nodeResponse?: ServerResponse
+): Promise<Response | void> {
   try {
     const app = await getServerlessApp();
-    return await app.handle(normalizeServerlessRequest(request, app.config.publicBaseUrl), {
-      remoteAddress: getRemoteAddress(request)
-    });
+    if (isWebRequest(request)) {
+      return await app.handle(normalizeServerlessRequest(request, app.config.publicBaseUrl), {
+        remoteAddress: getRemoteAddress(request)
+      });
+    }
+
+    const response = await app.handle(
+      normalizeServerlessRequest(toServerlessWebRequest(request, app.config.publicBaseUrl), app.config.publicBaseUrl),
+      {
+        remoteAddress: getRemoteAddress(request)
+      }
+    );
+
+    if (nodeResponse) {
+      await writeServerlessNodeResponse(nodeResponse, response);
+      return;
+    }
+
+    return response;
   } catch (error) {
     console.error("vercel_function_failed", error);
 
-    return new Response(
-      JSON.stringify({
-        error: "Loi he thong",
-        code: "INTERNAL_SERVER_ERROR"
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "Cache-Control": "no-store"
-        }
-      }
-    );
+    const response = createInternalErrorResponse();
+    if (nodeResponse) {
+      await writeServerlessNodeResponse(nodeResponse, response);
+      return;
+    }
+
+    return response;
   }
 }
